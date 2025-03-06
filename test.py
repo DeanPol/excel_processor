@@ -19,42 +19,66 @@ def load_excel_file():
 	return file_path
 
 def select_values():
+    # Load options from JSON file
+    options = load_options_from_json('scenarios.json')
 
-	# Load options from JSON file
-	options = load_options_from_json('scenarios.json')
+    # Create the main window
+    window = tk.Tk()
+    window.title("Select Values")
 
-	# Create the main window
-	window = tk.Tk()
-	window.title("Select Values")
+    # Create a canvas and a vertical scrollbar
+    canvas = tk.Canvas(window)
+    scrollbar = tk.Scrollbar(window, orient="vertical", command=canvas.yview)
+    canvas.configure(yscrollcommand=scrollbar.set)
 
-	# Create a dictionary to hold the checkbox states (True or False)
-	checkbox_vars = {}
+    # Create a frame inside the canvas to hold the checkboxes
+    checkbox_frame = tk.Frame(canvas)
 
-	# This holds the list of selected options
-	selected_options = []
+    # Add the checkboxes to the frame
+    checkbox_vars = {}
+    for option in options:
+        var = tk.BooleanVar()
+        checkbox = tk.Checkbutton(checkbox_frame, text=option, variable=var)
+        checkbox.pack(anchor='w', padx=10)
+        checkbox_vars[option] = var
 
-	# Function to get selected options when the user clicks "Submit"
-	def submit():
-		# Collect selected options based on checkbox states
-		selected_options[:] = [option for option, var in checkbox_vars.items() if var.get()]
-		window.quit()  # Close the window after selection
+    # Create a window on the canvas to hold the frame (this enables scrolling)
+    canvas.create_window((0, 0), window=checkbox_frame, anchor="nw")
 
-	# Create checkboxes for each option
-	for option in options:
-		var = tk.BooleanVar()
-		checkbox = tk.Checkbutton(window, text=option, variable=var)
-		checkbox.pack(anchor='w')
-		checkbox_vars[option] = var
+    # Configure the scrollbar to work with the canvas
+    scrollbar.pack(side="right", fill="y")
+    canvas.pack(side="left", fill="both", expand=True)
 
-	# Add a Submit button
-	submit_button = tk.Button(window, text="Submit", command=submit)
-	submit_button.pack()
+    # Update the scrollable region whenever new widgets are added
+    def on_frame_configure(event):
+        canvas.configure(scrollregion=canvas.bbox("all"))
 
-	# Run the window's event loop
-	window.mainloop()
+    checkbox_frame.bind("<Configure>", on_frame_configure)
 
-	# Return the list of selected options
-	return selected_options
+    # Create a function to get selected options when the user clicks "Submit"
+    selected_options = []
+
+    def submit():
+        selected_options[:] = [option for option, var in checkbox_vars.items() if var.get()]
+        window.quit()  # Close the window after selection
+
+    # Add a Submit button
+    submit_button = tk.Button(window, text="Submit", command=submit)
+    submit_button.pack(pady=10)
+
+    # Add a Select All button
+    def select_all():
+        for var in checkbox_vars.values():
+            var.set(True)  # Set all checkboxes to checked
+
+    select_all_button = tk.Button(window, text="Select All", command=select_all)
+    select_all_button.pack(pady=5)
+
+    # Run the window's event loop
+    window.mainloop()
+
+    # Return the list of selected options
+    return selected_options
 
 
 def save_excel_file(df):
@@ -73,8 +97,7 @@ def remove_row(df):
 	df.reset_index(drop=True, inplace=True)
 	return df
 
-def add_columns(df):
-	new_column_values = ['Value1'] * 7
+def add_columns(df, selected_values):
 
 	# Check if the column already exists
 
@@ -83,7 +106,7 @@ def add_columns(df):
     
 	# Try inserting the column at the specified position
 	try:
-		df.insert(0, 'TS', new_column_values)
+		df.insert(0, 'TS', ['TS'] + selected_values)
 	except Exception as e:
 		raise ValueError(f"Error inserting the column: {e}")
 	return df
@@ -98,10 +121,9 @@ def rearrange_column(df):
 
 def main():
 
-	selected_values = select_values()
-	print(selected_values)
+	#selected_values = select_values()
 
-	"""
+
 	# Select excel file to process.
 	file_path = load_excel_file()
 	if not file_path:
@@ -111,19 +133,23 @@ def main():
 	df = pd.read_excel(file_path)
 
 	# Remove the second row.
-	df = remove_row(df)
+	#df = remove_row(df)
+	df.drop(index=1)
+	df.reset_index(drop=True, inplace=True)
 
 	# Add column.
-	df = add_columns(df)
+	#df = add_columns(df, selected_values)
+
+	"""
 
 	# Perform column sort.
 	df = rearrange_column(df)
 
+	"""
 	# Save output file.
 	if df is not False:
 		save_excel_file(df)
 
-	"""
 
 if __name__ == "__main__":
 	main()
