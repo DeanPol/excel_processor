@@ -1,22 +1,28 @@
-import pandas as pd
 import tkinter as tk
 from tkinter import filedialog
-from tkinter import simpledialog
-from tkinter import messagebox
 import json
+
+# Load and Save our excel files
+def load_excel_file():
+	root = tk.Tk()
+	root.withdraw()
+	file_path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx")])
+	return file_path
+
+def save_excel_file(df):
+	root = tk.Tk()
+	root.withdraw()
+	file_path = filedialog.asksaveasfilename(defaultextension=".xlsx", filetypes=[("Excel files", "*.xlsx")])
+	df.to_excel(file_path, index=False)
+	print(f"File saved at: {file_path}")
+	
+# Load and select options from json file
 
 def load_options_from_json(file_path):
     # Load the JSON file
     with open(file_path, 'r') as file:
         data = json.load(file)
     return data['options']  # Return the list of options from the JSON
-
-
-def load_excel_file():
-	root = tk.Tk()
-	root.withdraw()
-	file_path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx")])
-	return file_path
 
 def select_values():
     # Load options from JSON file
@@ -79,77 +85,3 @@ def select_values():
 
     # Return the list of selected options
     return selected_options
-
-
-def save_excel_file(df):
-	root = tk.Tk()
-	root.withdraw()
-	file_path = filedialog.asksaveasfilename(defaultextension=".xlsx", filetypes=[("Excel files", "*.xlsx")])
-	df.to_excel(file_path, index=False)
-	print(f"File saved at: {file_path}")
-
-def remove_row(df):
-	# Check if document has at least 2 rows
-	if df.shape[0] < 2:
-		return False
-	
-	df.drop(index=1)
-	df.reset_index(drop=True, inplace=True)
-	return df
-
-def add_columns(df, selected_values):
-
-	# Check if the column already exists
-
-	if 'TS' in df.columns:
-		raise ValueError("The column 'TS' already exists in the DataFrame.")
-    
-	# Try inserting the column at the specified position
-	try:
-		df.insert(0, 'TS', ['TS'] + selected_values)
-	except Exception as e:
-		raise ValueError(f"Error inserting the column: {e}")
-	return df
-
-def rearrange_column(df):
-	if 'requestName' in df.columns:
-		df['requestName'] = df['requestName'].sort_values().reset_index(drop=True)
-		return df
-	else:
-		print("Invalid data - Column 'requestName' does not exist")
-		return False
-
-def main():
-
-	#selected_values = select_values()
-
-
-	# Select excel file to process.
-	file_path = load_excel_file()
-	if not file_path:
-		print("No file selected. Exiting...")
-		return
-	
-	df = pd.read_excel(file_path)
-
-	# Remove the second row.
-	#df = remove_row(df)
-	df.drop(index=1)
-	df.reset_index(drop=True, inplace=True)
-
-	# Add column.
-	#df = add_columns(df, selected_values)
-
-	"""
-
-	# Perform column sort.
-	df = rearrange_column(df)
-
-	"""
-	# Save output file.
-	if df is not False:
-		save_excel_file(df)
-
-
-if __name__ == "__main__":
-	main()
