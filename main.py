@@ -64,6 +64,17 @@ def add_columns(df, selected_values):
 		raise ValueError(f"Error inserting the column: {e}")
 	return df
 
+
+# Function to shift a column data
+def shift_column_up_from_index(df: pd.DataFrame, column_name: str, start_index: int) -> pd.DataFrame:
+    df_copy = df.copy()  # Avoid modifying the original DataFrame
+    
+    # Shift values only from the start_index downward
+    df_copy.loc[start_index:, column_name] = df_copy.loc[start_index:, column_name].shift(-1)
+    
+    return df_copy
+
+
 def extract_scenario_numbers(val):
     if pd.isna(val) or not isinstance(val, str):
         return (0, 0, 0)  # Ensure we always return a tuple
@@ -77,6 +88,7 @@ def extract_scenario_numbers(val):
         return (X, Y, Z)  # Always return a tuple
 
     return (0, 0, 0)  # Return a default tuple when no match is found
+
 # Function to extract (X, Y, Z) from a given string
 def extract_request_numbers(val):
     if pd.isna(val) or not isinstance(val, str):
@@ -97,20 +109,33 @@ def align_columns(df):
 	blank_row = pd.DataFrame([[None] * len(df.columns)], columns=df.columns)
 	
 	for idx, row in enumerate(df.itertuples(index=True)):
-		result = extract_request_numbers(row.requestName)
-		if result == (1, 1, 3):	  
+		print(idx)
+		scenario_tuple = extract_scenario_numbers(row.TS)
+		# If scenario_tuple is empty (0,0,0), then we stop the process.
+		if scenario_tuple == (0, 0, 0):
+			return df
+
+		request_tuple = extract_request_numbers(row.requestName)
+		print(f"{scenario_tuple} ----- {request_tuple}")
+		if request_tuple != scenario_tuple:	  
 			# Add the empty row before the current index (adjust for already added rows)
 			df = pd.concat([df.iloc[:idx + rows_added], blank_row, df.iloc[idx + rows_added:]]).reset_index(drop=True)
 
-			# Update the number of rows added
+			# Update the number of rows added.
 			rows_added += 1
+
+			# Shift the TS column data one row up.
+			df = shift_column_up_from_index(df, 'TS', idx)
+
+			idx += 1
+
 	return df
 
 #	return df
 
 def main():
 
-	#selected_values = select_values()
+	selected_values = select_values()
 
 	# Select excel file to process.
 	file_path = load_excel_file()
@@ -127,7 +152,7 @@ def main():
 
 
 	# Add column.
-	#df = add_columns(df, selected_values)
+	df = add_columns(df, selected_values)
 
 	df = align_columns(df)
 
