@@ -65,73 +65,58 @@ def add_columns(df, selected_values):
 	return df
 
 
-# Function to shift a column data
 def shift_column_up_from_index(df: pd.DataFrame, column_name: str, start_index: int) -> pd.DataFrame:
-    df_copy = df.copy()  # Avoid modifying the original DataFrame
-    
-    # Shift values only from the start_index downward
+    df_copy = df.copy()
     df_copy.loc[start_index:, column_name] = df_copy.loc[start_index:, column_name].shift(-1)
-    
     return df_copy
-
 
 def extract_scenario_numbers(val):
     if pd.isna(val) or not isinstance(val, str):
-        return (0, 0, 0)  # Ensure we always return a tuple
+        return (0, 0, 0)
 
-    # Extract X, Y, and optional Z
     match = re.search(r"S(\d{1,2})\s+TS\s*(\d{1,2})(?:\.(\d))?", val)
     if match:
-        X = int(match.group(1))  # Extract `S` number
-        Y = int(match.group(2))  # Extract `TS` number
-        Z = int(match.group(3)) if match.group(3) else 0  # Extract `Z` (optional)
-        return (X, Y, Z)  # Always return a tuple
+        X = int(match.group(1))
+        Y = int(match.group(2))
+        Z = int(match.group(3)) if match.group(3) else 0
+        return (X, Y, Z)
 
-    return (0, 0, 0)  # Return a default tuple when no match is found
+    return (0, 0, 0)
 
-# Function to extract (X, Y, Z) from a given string
 def extract_request_numbers(val):
     if pd.isna(val) or not isinstance(val, str):
-        return (0, 0, 0)  # Ensure we always return a tuple
-	
-    # Extract X, Y, and optional Z
+        return (0, 0, 0)
+
     match = re.search(r"S(\d{1,2})\s+TS(-?)\s*(\d{1,2})(?:\.(\d))?", val)
     if match:
-        X = int(match.group(1))  # Extract `S` number
-        Y = int(match.group(3))  # Extract `TS` number
-        Z = int(match.group(4)) if match.group(4) else 0  # Extract `Z` (optional)
-        return (X, Y, Z)  # Always return a tuple
+        X = int(match.group(1))
+        Y = int(match.group(3))
+        Z = int(match.group(4)) if match.group(4) else 0
+        return (X, Y, Z)
 
-    return (0, 0, 0)  # Return a default tuple when no match is found
+    return (0, 0, 0)
 
 def align_columns(df):
-	rows_added = 0
-	blank_row = pd.DataFrame([[None] * len(df.columns)], columns=df.columns)
-	
-	for idx, row in enumerate(df.itertuples(index=True)):
-		print(idx)
-		scenario_tuple = extract_scenario_numbers(row.TS)
-		# If scenario_tuple is empty (0,0,0), then we stop the process.
-		if scenario_tuple == (0, 0, 0):
-			return df
+    """
+    Aligns the second column based on missing values from the first column.
+    Instead of modifying while iterating, we collect missing indices and add them at once.
+    """
+    missing_indices = []
+    
+    for idx, row in df.iterrows():
+        scenario_tuple = extract_scenario_numbers(row.TS)
+        request_tuple = extract_request_numbers(row.requestName)
 
-		request_tuple = extract_request_numbers(row.requestName)
-		print(f"{scenario_tuple} ----- {request_tuple}")
-		if request_tuple != scenario_tuple:	  
-			# Add the empty row before the current index (adjust for already added rows)
-			df = pd.concat([df.iloc[:idx + rows_added], blank_row, df.iloc[idx + rows_added:]]).reset_index(drop=True)
+        # If there's a mismatch or missing value, we mark this index
+        if request_tuple != scenario_tuple:
+            missing_indices.append(idx)
+    
+    # Insert blank rows in one batch (to avoid modifying during iteration)
+    for offset, idx in enumerate(missing_indices):
+        blank_row = pd.DataFrame([[df.loc[idx, "TS"], None]], columns=df.columns)
+        df = pd.concat([df.iloc[:idx + offset], blank_row, df.iloc[idx + offset:]]).reset_index(drop=True)
 
-			# Update the number of rows added.
-			rows_added += 1
-
-			# Shift the TS column data one row up.
-			df = shift_column_up_from_index(df, 'TS', idx)
-
-			idx += 1
-
-	return df
-
-#	return df
+    return df
 
 def main():
 
