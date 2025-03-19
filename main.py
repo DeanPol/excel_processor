@@ -18,28 +18,18 @@ def remove_row(df):
 		print(f"Error: {e}")
 		sys.exit(1)
 
-# Function to extract (X, Y, Z) with optional '-' and ':', and X can have 1 or 2 digits
-def extract_values(request_name):
-    # Match the pattern with optional '-' between 'TS' and Y and optional ':' at the end,
-    # and X can be 1 or 2 digits
-    match = re.match(r"S(\d{1,2})\s+TS[-\s]?(\d+)(?:\.(\d))?(?:\s*(:)?)", request_name)
-    if match:
-        X = int(match.group(1))  # Extract X (can be 1 or 2 digits)
-        Y = int(match.group(2))  # Extract Y
-        Z = int(match.group(3)) if match.group(3) else -1  # If Z is missing, use -1
-        return X, Y, Z
-    return (0, 0, -1)  # Default in case of a mismatch
-
 def rearrange_column(df):
 	if 'requestName' in df.columns:
 		# Apply extraction function and sort
-		df["sort_values"] = df["requestName"].apply(extract_values)
+		df["sort_values"] = df["requestName"].apply(extract_request_numbers)
 		
 		# Sorting by extracted (X, Y, Z) where the sorting is done numerically
 		df.sort_values(by="sort_values", ascending=True, inplace=True)
 		
 		# Clean up after sorting (drop the helper column)
 		df.drop(columns=["sort_values"], inplace=True)
+
+		df = df.reset_index(drop=True)
 
 		return df
 
@@ -48,20 +38,25 @@ def rearrange_column(df):
 		return False
 	
 	
-def add_columns(df, selected_values):
+def add_column(df, selected_values):
 
 	# Check if the column already exists
 	if 'TS' in df.columns:
 		raise ValueError("The column 'TS' already exists in the DataFrame.")
-	
-	# Grab number of rows
-	number_rows = df.shape[0]
-    
+
+	# Change df in order to accomodate new column 
+	max_rows = max(df.shape[0], len(selected_values))
+	try:
+		df = df.reindex(range(max_rows))
+	except Exception as e:
+		raise ValueError(f"Error changing data frame row number: {e}")
+
 	# Try inserting the column at the specified position
 	try:
-		df.insert(0, 'TS', selected_values + [''] * (number_rows - len(selected_values)))
+		df.insert(0, 'TS', selected_values)
 	except Exception as e:
 		raise ValueError(f"Error inserting the column: {e}")
+	
 	return df
 
 
@@ -96,27 +91,38 @@ def extract_request_numbers(val):
 
     return (0, 0, 0)
 
+# Function to align columns
 def align_columns(df):
-    """
-    Aligns the second column based on missing values from the first column.
-    Instead of modifying while iterating, we collect missing indices and add them at once.
-    """
-    missing_indices = []
-    
-    for idx, row in df.iterrows():
-        scenario_tuple = extract_scenario_numbers(row.TS)
-        request_tuple = extract_request_numbers(row.requestName)
+	blank_row = pd.DataFrame([{col: None for col in df.columns}])  # Create a blank row
+	need_loop = True
+	
+	while need_loop:
+		need_loop = False  # Assume no changes will be needed
 
-        # If there's a mismatch or missing value, we mark this index
-        if request_tuple != scenario_tuple:
-            missing_indices.append(idx)
-    
-    # Insert blank rows in one batch (to avoid modifying during iteration)
-    for offset, idx in enumerate(missing_indices):
-        blank_row = pd.DataFrame([[df.loc[idx, "TS"], None]], columns=df.columns)
-        df = pd.concat([df.iloc[:idx + offset], blank_row, df.iloc[idx + offset:]]).reset_index(drop=True)
+		for idx, row in df.iterrows():
+			scenario_tuple = extract_scenario_numbers(row.TS)        
+			request_tuple = extract_request_numbers(row.requestName)
 
-    return df
+			if scenario_tuple == (0, 0, 0):
+				return df  # Exit function when termination condition is met
+			
+			if request_tuple == (0, 0, 0):
+				continue
+
+			if scenario_tuple != request_tuple:
+				df = pd.concat([df.iloc[:idx], blank_row, df.iloc[idx:]]).reset_index(drop=True)
+				
+				# Shift the 'TS' column up from the inserted row
+				df.loc[idx:, 'TS'] = df.loc[idx:, 'TS'].shift(-1)
+				
+				need_loop = True  # A modification was made, so restart the loop
+				break  # Exit the for-loop and restart while-loop
+		
+	return df
+
+def remove_trailing_empty_rows(df):
+    return df.iloc[:df.dropna(how="all").index[-1] + 1] if not df.dropna(how="all").empty else df.iloc[:0]
+
 
 def main():
 
@@ -137,9 +143,11 @@ def main():
 
 
 	# Add column.
-	df = add_columns(df, selected_values)
+	df = add_column(df, selected_values)
 
 	df = align_columns(df)
+
+	#df = remove_trailing_empty_rows(df)
 
 	# Save output file.
 	save_excel_file(df)
