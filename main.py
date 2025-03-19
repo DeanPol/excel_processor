@@ -147,7 +147,7 @@ def main():
 
 	df = align_columns(df)
 
-	#df = remove_trailing_empty_rows(df)
+	df = remove_trailing_empty_rows(df)
 
 	# Save output file.
 	save_excel_file(df)
