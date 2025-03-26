@@ -5,13 +5,13 @@ import pandas as pd
 from fileHandling import load_excel_file
 from fileHandling import save_excel_file
 from fileHandling import select_values
+from fileHandling import remove_trailing_empty_rows
 
 def remove_row(df):
-	# Check if document has at least 2 rows
 	if df.shape[0] < 2:
 		raise ValueError("DataFrame must have at least two rows.")
 	try: 
-		df.drop(0, inplace=True)
+		df = df[df['requestName'] != 'Rescheduling batch job']
 		df.reset_index(drop=True, inplace=True)
 		return df
 	except Exception as e:
@@ -39,12 +39,7 @@ def rearrange_column(df):
 	
 	
 def add_column(df, selected_values):
-
-	# Check if the column already exists
-	if 'TS' in df.columns:
-		raise ValueError("The column 'TS' already exists in the DataFrame.")
-
-	# Change df in order to accomodate new column 
+	# Change df in order to accomodate new column by adding new rows
 	max_rows = max(df.shape[0], len(selected_values))
 	try:
 		df = df.reindex(range(max_rows))
@@ -58,12 +53,6 @@ def add_column(df, selected_values):
 		raise ValueError(f"Error inserting the column: {e}")
 	
 	return df
-
-
-def shift_column_up_from_index(df: pd.DataFrame, column_name: str, start_index: int) -> pd.DataFrame:
-    df_copy = df.copy()
-    df_copy.loc[start_index:, column_name] = df_copy.loc[start_index:, column_name].shift(-1)
-    return df_copy
 
 def extract_scenario_numbers(val):
     if pd.isna(val) or not isinstance(val, str):
@@ -93,7 +82,7 @@ def extract_request_numbers(val):
 
 # Function to align columns
 def align_columns(df):
-	blank_row = pd.DataFrame([{col: None for col in df.columns}])  # Create a blank row
+	blank_row = pd.DataFrame([{col: "" for col in df.columns}])  # Create a blank row
 	need_loop = True
 	
 	while need_loop:
@@ -120,13 +109,34 @@ def align_columns(df):
 		
 	return df
 
-def remove_trailing_empty_rows(df):
-    return df.iloc[:df.dropna(how="all").index[-1] + 1] if not df.dropna(how="all").empty else df.iloc[:0]
+def convertToMs(val):
+	if type(val) != str:
+		return val
+	if 'ms' in val:
+		val = float(val.replace('ms',''))
+	elif 's' in val:
+		val = float(val.replace('s', ''))
+		val = str(val * 1000)
+	return val		
 
+def outputType(val):
+	print(f"Type of value is: {type(val)}")
+
+def append_Ms_column(df, baseColumnName, newColumnName):
+    try:
+        df[newColumnName] = df.loc[:, baseColumnName].apply(convertToMs) 
+    except KeyError:
+        raise ValueError(f"Column '{baseColumnName}' not found in DataFrame")
+    except Exception as e:
+        raise ValueError(f"Error applying value change: {e}")
+    return df
 
 def main():
-
+	# Select json file to process.
 	selected_values = select_values()
+	if len(selected_values) == 0:
+		print("No scenarios selected. Exiting...")
+		return None
 
 	# Select excel file to process.
 	file_path = load_excel_file()
@@ -136,18 +146,27 @@ def main():
 	
 	df = pd.read_excel(file_path)
 
-	# Remove the second row.
+	df.columns = df.columns.astype(str)
+
+	# Row 'Rescheduling batch job' is not needed
+	# Remove it if it exists.
 	df = remove_row(df)
 
+	# Sort our requestName column.
 	df = rearrange_column(df)
 
-
-	# Add column.
+	# Add scenarios column.
 	df = add_column(df, selected_values)
 
+	# Sort requests according to scenarios
 	df = align_columns(df)
 
 	df = remove_trailing_empty_rows(df)
+
+	# Append AvgToMs, MedianToMs and 90% Ms columns
+	df = append_Ms_column(df, 'Avg', 'AvgMs')
+	df = append_Ms_column(df, 'Median', 'MedianMs')
+	df = append_Ms_column(df, '0.9', '90% Ms')
 
 	# Save output file.
 	save_excel_file(df)

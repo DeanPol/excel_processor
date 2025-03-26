@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import filedialog
 import json
+import os
 
 # Load and Save our excel files
 def load_excel_file():
@@ -15,9 +16,15 @@ def save_excel_file(df):
 	file_path = filedialog.asksaveasfilename(defaultextension=".xlsx", filetypes=[("Excel files", "*.xlsx")])
 	df.to_excel(file_path, index=False)
 	print(f"File saved at: {file_path}")
+     
+def select_json_file():
+    file_path = filedialog.askopenfilename(filetypes=[("JSON files", "*.json")])
+    if not file_path:
+        print("No JSON file selected.")
+        return None
+    return os.path.basename(file_path)
 	
 # Load and select options from json file
-
 def load_options_from_json(file_path):
     # Load the JSON file
     with open(file_path, 'r') as file:
@@ -25,8 +32,9 @@ def load_options_from_json(file_path):
     return data['options']  # Return the list of options from the JSON
 
 def select_values():
+    file_name = select_json_file()
     # Load options from JSON file
-    options = load_options_from_json('scenarios.json')
+    options = load_options_from_json(file_name)
 
     # Create the main window
     window = tk.Tk()
@@ -85,3 +93,7 @@ def select_values():
 
     # Return the list of selected options
     return selected_options
+
+def remove_trailing_empty_rows(df):
+    return df.iloc[:df.dropna(how="all").index[-1] + 1] if not df.dropna(how="all").empty else df.iloc[:0]
+
